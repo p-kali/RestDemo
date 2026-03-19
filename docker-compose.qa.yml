@@ -1,0 +1,47 @@
+version: '3.8'
+#docker compose -f docker-compose.qa.yml --env-file .env.qa up
+services:
+  my-app:
+    image: 193849564091.dkr.ecr.us-east-1.amazonaws.com/dockdemo/rest-demo:v1
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8081
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE}
+
+  postgres-db:
+    image: postgres:15
+    container_name: postgres-db
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME}"]
+      interval: 5s
+      retries: 5
+
+  dbeaver:
+    image: dbeaver/cloudbeaver:latest
+    container_name: dbeaver
+    ports:
+      - "8090:8978"
+    environment:
+      CB_ADMIN_NAME: admin
+      CB_ADMIN_PASSWORD: admin
+    volumes:
+      - dbeaver-data:/opt/dbeaver/workspace
+
+volumes:
+  pgdata:
+  dbeaver-data:
