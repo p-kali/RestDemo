@@ -33,9 +33,42 @@ jobs:
       - name: Build with Maven
         run: mvn clean install -Dspring.profiles.active=test
 
-      # Upload JAR artifact
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+#      # Upload JAR artifact
+#      - name: Upload artifact
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: RestDemo-app
+#          path: target/*.jar
+
+      # Deploy to EC2
+      - name: Deploy - Stop App
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: RestDemo-app
-          path: target/*.jar
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/app
+            pkill -f 'java -jar' || true
+
+      - name: Copy JAR to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "target/*.jar"
+          target: "/home/ubuntu/app/"
+
+      - name: Start App
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cd /home/ubuntu/app
+            export DB_URL=${{ secrets.DB_URL }}
+            export DB_USERNAME=${{ secrets.DB_USERNAME }}
+            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            nohup java -jar *.jar > app.log 2>&1 &
