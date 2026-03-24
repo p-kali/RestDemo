@@ -49,8 +49,9 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
-            if pgrep -f "rest-demo" > /dev/null; then
-              pkill -f "rest-demo" > /dev/null 2>&1 || true
+            PID=$(pgrep -f "java.*rest-demo" | head -n 1)
+            if [ -n "$PID" ]; then
+              kill "$PID"
               echo "App stopped"
             else
               echo "App not running"
