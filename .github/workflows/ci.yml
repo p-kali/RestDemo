@@ -49,7 +49,12 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
-            pkill -f 'rest-demo' || echo "No app running"
+            if pgrep -f "rest-demo" > /dev/null; then
+              pkill -f "rest-demo"
+              echo "App stopped"
+            else
+              echo "App not running"
+            fi
 
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
