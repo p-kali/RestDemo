@@ -9,18 +9,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Setup Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # Cache Maven dependencies
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
@@ -29,32 +26,10 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2
 
-      # Build the project
       - name: Build with Maven
         run: mvn clean install -Dspring.profiles.active=test
 
-#      # Upload JAR artifact
-#      - name: Upload artifact
-#        uses: actions/upload-artifact@v4
-#        with:
-#          name: RestDemo-app
-#          path: target/*.jar
-
-      # Deploy to EC2
-      - name: Deploy - Stop App
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script_stop: false
-          script: |
-            cd /home/ubuntu
-            nohup /home/ubuntu/stop.sh > /tmp/stop.log 2>&1
-            sleep 4
-            echo "Stop complete"
-            cat /tmp/stop.log
-
+      # Copy JAR to EC2
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -63,8 +38,10 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/*.jar"
           target: "/home/ubuntu/app/"
+          strip_components: 1
 
-      - name: Start App
+      #Rename JAR file
+      - name: Rename JAR
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -72,8 +49,16 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
-            export DB_URL=${{ secrets.DB_URL }}
-            export DB_USERNAME=${{ secrets.DB_USERNAME }}
-            export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            # Add disown to fully detach from the SSH session
-            nohup java -jar *.jar > app.log 2>&1 & disown
+            JAR=$(ls *.jar | head -n 1)
+            mv "$JAR" rest-demo.jar
+
+      # Restart service using systemd
+      - name: Restart App (systemd)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo systemctl restart rest-demo
+            sudo systemctl status rest-demo --no-pager
