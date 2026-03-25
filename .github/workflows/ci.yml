@@ -51,7 +51,8 @@ jobs:
             cd /home/ubuntu/app
             PID=$(pgrep -f "java.*rest-demo" | head -n 1)
             if [ -n "$PID" ]; then
-              kill "$PID"
+              echo "Stopping app with PID $PID"
+              kill "$PID" && sleep 2 && kill -9 "$PID" 2>/dev/null || true
               echo "App stopped"
             else
               echo "App not running"
