@@ -44,8 +44,7 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          # Pick latest jar dynamically
-          source: "$(ls target/*.jar | sort -V | tail -n 1)"
+          source: "target/rest-demo.jar"
           target: "/home/ubuntu/app/rest-demo.jar"
 
       # 7️⃣ Restart systemd service on EC2
