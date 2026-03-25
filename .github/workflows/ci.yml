@@ -29,13 +29,9 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2
 
-      # 4️⃣ Clean old build (remove old jars)
-      - name: Clean old target
-        run: mvn clean
-
       # 5️⃣ Build the project
       - name: Build with Maven
-        run: mvn install -Dspring.profiles.active=test
+        run: mvn clean package -Dspring.profiles.active=test
 
       # 1️⃣ Ensure target folder exists on EC2
       - name: Create app folder on EC2
@@ -46,16 +42,35 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             mkdir -p /home/ubuntu/app
+            rm -f /home/ubuntu/app/*.jar
 
       # 6️⃣ Copy latest JAR to EC2
+#      - name: Copy latest JAR to EC2
+#        uses: appleboy/scp-action@v0.1.7
+#        with:
+#          host: ${{ secrets.EC2_HOST }}
+#          username: ${{ secrets.EC2_USER }}
+#          key: ${{ secrets.EC2_SSH_KEY }}
+#          source: "$(ls target/*.jar | grep -v '.original' | sort -V | tail -n 1)"
+#          target: "/home/ubuntu/app/rest-demo.jar"
       - name: Copy latest JAR to EC2
-        uses: appleboy/scp-action@v0.1.7
+        run: |
+          # Find the latest jar (skip .original)
+          LATEST_JAR=$(ls target/*.jar | grep -v '.original' | sort -V | tail -n 1)
+          echo "Latest JAR to copy: $LATEST_JAR"
+
+          # Use scp to copy it to EC2
+          scp -i ${{ secrets.EC2_SSH_KEY }} -o StrictHostKeyChecking=no "$LATEST_JAR" ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/app/rest-demo.jar
+
+      - name: Verify jar on EC2
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "target/rest-demo.jar"           # single file
-          target: "/home/ubuntu/app/"
+          script: |
+            echo "Files in /home/ubuntu/app:"
+            ls -lh /home/ubuntu/app
 
       # 7️⃣ Restart systemd service on EC2
       - name: Restart App using systemd
