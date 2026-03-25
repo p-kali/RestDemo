@@ -9,18 +9,15 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1️⃣ Checkout code
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2️⃣ Set up Java 17
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      # 3️⃣ Cache Maven dependencies
       - name: Cache Maven packages
         uses: actions/cache@v4
         with:
@@ -29,26 +26,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2
 
-      # 5️⃣ Build the project
       - name: Build with Maven
-        run: mvn clean package -Dspring.profiles.active=test
+        run: |
+          mvn clean package -Dspring.profiles.active=test
+          echo "Built JAR:"
+          ls -lh target/rest-demo.jar
 
-      # 5️⃣ Verify JAR built
-      - name: Verify JAR built
-        run: ls -lh target/rest-demo.jar
-
-      # 5️⃣ Create / Verify app folder in EC2
-      - name: Create app folder on EC2
+      - name: Stop App
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            mkdir -p /home/ubuntu/app
-            rm -f /home/ubuntu/app/*.jar
+            sudo systemctl stop rest-demo || true
+            sleep 2
 
-      # 6️⃣ Copy latest JAR to EC2
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -56,31 +49,23 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/rest-demo.jar"
-          target: "/home/ubuntu/app/"
+          target: "/home/ubuntu/"
           strip_components: 1
 
-      # 6️⃣ Verify JAR on EC2
-      - name: Verify JAR on EC2
+      - name: Move JAR and Start App
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            echo "Files in /home/ubuntu/app:"
-            ls -lh /home/ubuntu/app/
-            test -f /home/ubuntu/app/rest-demo.jar && echo "JAR exists" || echo "JAR MISSING"
+            # Move new JAR into place
+            mv -f /home/ubuntu/rest-demo.jar /home/ubuntu/app/rest-demo.jar
+            echo "JAR details:"
+            ls -lh /home/ubuntu/app/rest-demo.jar
 
-      # 7️⃣ Restart systemd service on EC2
-      - name: Restart App using systemd
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            # Restart Spring Boot service
-            sudo systemctl restart rest-demo
+            # Reload and start
+            sudo systemctl daemon-reload
+            sudo systemctl start rest-demo
             sleep 3
-            # Check status
             sudo systemctl status rest-demo --no-pager
