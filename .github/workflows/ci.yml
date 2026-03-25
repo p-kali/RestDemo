@@ -49,17 +49,11 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: false
           script: |
-            cd /home/ubuntu/app
-            PID=$(pgrep -f "java.*rest-demo" | head -n 1)
-            if [ -n "$PID" ]; then
-              echo "Stopping app with PID $PID"
-              # Run kill in a completely separate subshell/session
-              bash -c "kill $PID 2>/dev/null; sleep 2; kill -9 $PID 2>/dev/null; true" || true
-              echo "App stopped"
-            else
-              echo "App not running"
-            fi
-            exit 0
+            cd /home/ubuntu
+            nohup /home/ubuntu/stop.sh > /tmp/stop.log 2>&1
+            sleep 4
+            echo "Stop complete"
+            cat /tmp/stop.log
 
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
