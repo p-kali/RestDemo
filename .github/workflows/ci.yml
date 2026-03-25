@@ -37,6 +37,16 @@ jobs:
       - name: Build with Maven
         run: mvn install -Dspring.profiles.active=test
 
+      # 1️⃣ Ensure target folder exists on EC2
+      - name: Create app folder on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            mkdir -p /home/ubuntu/app
+
       # 6️⃣ Copy latest JAR to EC2
       - name: Copy latest JAR to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -44,8 +54,8 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
-          source: "target/rest-demo.jar"
-          target: "/home/ubuntu/app/rest-demo.jar"
+          source: "target/rest-demo.jar"           # single file
+          target: "/home/ubuntu/app/"
 
       # 7️⃣ Restart systemd service on EC2
       - name: Restart App using systemd
