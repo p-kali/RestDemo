@@ -53,9 +53,8 @@ jobs:
             PID=$(pgrep -f "java.*rest-demo" | head -n 1)
             if [ -n "$PID" ]; then
               echo "Stopping app with PID $PID"
-              kill "$PID" 2>/dev/null || true
-              sleep 2
-              kill -9 "$PID" 2>/dev/null || true
+              # Run kill in a completely separate subshell/session
+              bash -c "kill $PID 2>/dev/null; sleep 2; kill -9 $PID 2>/dev/null; true" || true
               echo "App stopped"
             else
               echo "App not running"
