@@ -52,11 +52,14 @@ jobs:
             PID=$(pgrep -f "java.*rest-demo" | head -n 1)
             if [ -n "$PID" ]; then
               echo "Stopping app with PID $PID"
-              kill "$PID" && sleep 2 && kill -9 "$PID" 2>/dev/null || true
+              kill "$PID" 2>/dev/null || true
+              sleep 2
+              kill -9 "$PID" 2>/dev/null || true
               echo "App stopped"
             else
               echo "App not running"
             fi
+            exit 0
 
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -78,4 +81,5 @@ jobs:
             export DB_URL=${{ secrets.DB_URL }}
             export DB_USERNAME=${{ secrets.DB_USERNAME }}
             export DB_PASSWORD=${{ secrets.DB_PASSWORD }}
-            nohup java -jar *.jar > app.log 2>&1 &
+            # Add disown to fully detach from the SSH session
+            nohup java -jar *.jar > app.log 2>&1 & disown
