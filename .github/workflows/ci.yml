@@ -49,8 +49,11 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
-            JAR=$(ls *.jar | head -n 1)
-            mv "$JAR" rest-demo.jar
+            for file in *.jar; do
+              if [ "$file" != "rest-demo.jar" ]; then
+                mv "$file" rest-demo.jar
+              fi
+            done
 
       # Restart service using systemd
       - name: Restart App (systemd)
