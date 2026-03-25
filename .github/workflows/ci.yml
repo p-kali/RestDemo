@@ -38,7 +38,6 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           source: "target/*.jar"
           target: "/home/ubuntu/app/"
-          strip_components: 1
 
       #Rename JAR file
       - name: Rename JAR
@@ -49,11 +48,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd /home/ubuntu/app
-            for file in *.jar; do
-              if [ "$file" != "rest-demo.jar" ]; then
-                mv "$file" rest-demo.jar
-              fi
-            done
+            mv /home/ubuntu/target/*.jar /home/ubuntu/app/rest-demo.jar
+            rm -rf /home/ubuntu/target
 
       # Restart service using systemd
       - name: Restart App (systemd)
