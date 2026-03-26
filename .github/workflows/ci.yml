@@ -71,8 +71,6 @@ jobs:
 
       - name: Deploy + Health Check + Rollback
         uses: appleboy/ssh-action@v1.0.3
-        env:
-          NEW_VERSION: ${{ env.NEW_VERSION }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
@@ -81,9 +79,10 @@ jobs:
             set -e
             cd /home/ubuntu/app
 
+            NEW_VERSION=${{ env.NEW_VERSION }}
             echo "Deploying version: $NEW_VERSION"
 
-            # Capture previous jar
+            # capture previous
             if [ -L rest-demo.jar ]; then
               PREV_JAR=$(readlink -f rest-demo.jar)
               echo "Previous JAR: $PREV_JAR"
@@ -91,7 +90,7 @@ jobs:
               PREV_JAR=""
             fi
 
-            # Move new jar
+            # move new jar
             NEW_JAR="rest-demo-${NEW_VERSION}.jar"
             mv -f /home/ubuntu/rest-demo.jar $NEW_JAR
             ln -sfn $NEW_JAR rest-demo.jar
@@ -100,7 +99,7 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl restart rest-demo
 
-            source /home/ubuntu/app/.env
+            source .env
             echo "Using port: $APP_PORT"
 
             HEALTH_OK=false
@@ -121,12 +120,12 @@ jobs:
                 echo "Rolling back to $PREV_JAR"
                 ln -sfn "$PREV_JAR" rest-demo.jar
                 sudo systemctl restart rest-demo
-                echo "Rollback complete"
-              else
-                echo "No previous version available"
               fi
 
               exit 1
             fi
 
             echo "Deployment successful"
+
+            # cleanup old jars (keep last 5)
+            ls -t rest-demo-*.jar | tail -n +6 | xargs -r rm -f
