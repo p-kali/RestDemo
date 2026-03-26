@@ -33,16 +33,21 @@ jobs:
           echo "Git commit:"
           git log -1 --oneline
           echo "NEW_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
+      
 
-      - name: Stop App
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            sudo systemctl stop rest-demo || true
-            sleep 2
+      # ===========================
+      # OLD STOP STEP (COMMENTED)
+      # ===========================
+      #      - name: Stop App
+      #        uses: appleboy/ssh-action@v1.0.3
+      #        with:
+      #          host: ${{ secrets.EC2_HOST }}
+      #          username: ${{ secrets.EC2_USER }}
+      #          key: ${{ secrets.EC2_SSH_KEY }}
+      #          script: |
+      #            sudo systemctl stop rest-demo || true
+      #            sleep 2
+
 
       - name: Copy JAR to EC2
         uses: appleboy/scp-action@v0.1.7
@@ -54,6 +59,7 @@ jobs:
           target: "/home/ubuntu/"
           strip_components: 1
 
+
       - name: Write env file on EC2
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -62,14 +68,82 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cat > /home/ubuntu/app/.env << 'EOF'
-            APP_PORT=8081
             DB_URL=${{ secrets.DB_URL }}
             DB_USERNAME=${{ secrets.DB_USERNAME }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
             EOF
             chmod 600 /home/ubuntu/app/.env
+      
 
-      - name: Deploy + Health Check + Rollback
+      # =====================================================
+      # OLD DEPLOY + HEALTH CHECK + ROLLBACK (COMMENTED)
+      # =====================================================
+      #      - name: Deploy + Health Check + Rollback
+      #        uses: appleboy/ssh-action@v1.0.3
+      #        with:
+      #          host: ${{ secrets.EC2_HOST }}
+      #          username: ${{ secrets.EC2_USER }}
+      #          key: ${{ secrets.EC2_SSH_KEY }}
+      #          script: |
+      #            set -e
+      #            cd /home/ubuntu/app
+      #
+      #            NEW_VERSION=${{ env.NEW_VERSION }}
+      #            echo "Deploying version: $NEW_VERSION"
+      #
+      #            # capture previous
+      #            if [ -L rest-demo.jar ]; then
+      #              PREV_JAR=$(readlink -f rest-demo.jar)
+      #              echo "Previous JAR: $PREV_JAR"
+      #            else
+      #              PREV_JAR=""
+      #            fi
+      #
+      #            # move new jar
+      #            NEW_JAR="rest-demo-${NEW_VERSION}.jar"
+      #            mv -f /home/ubuntu/rest-demo.jar $NEW_JAR
+      #            ln -sfn $NEW_JAR rest-demo.jar
+      #
+      #            echo "Starting service..."
+      #            sudo systemctl daemon-reload
+      #            sudo systemctl restart rest-demo
+      #
+      #            source .env
+      #            echo "Using port: $APP_PORT"
+      #
+      #            HEALTH_OK=false
+      #            for i in {1..10}; do
+      #              RESPONSE=$(curl -s http://localhost:$APP_PORT/actuator/health || true)
+      #              echo "Attempt $i: $RESPONSE"
+      #              if echo "$RESPONSE" | grep -q '"status":"UP"'; then
+      #                HEALTH_OK=true
+      #                break
+      #              fi
+      #              sleep 5
+      #            done
+      #
+      #            if [ "$HEALTH_OK" != "true" ]; then
+      #              echo "Health check failed"
+      #
+      #              if [ ! -z "$PREV_JAR" ]; then
+      #                echo "Rolling back to $PREV_JAR"
+      #                ln -sfn "$PREV_JAR" rest-demo.jar
+      #                sudo systemctl restart rest-demo
+      #              fi
+      #
+      #              exit 1
+      #            fi
+      #
+      #            echo "Deployment successful"
+      #
+      #            # cleanup old jars (keep last 5)
+      #            ls -t rest-demo-*.jar | tail -n +6 | xargs -r rm -f
+
+
+      # =====================================================
+      # NEW BLUE GREEN DEPLOYMENT
+      # =====================================================
+      - name: Blue Green Deploy
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST }}
@@ -78,33 +152,38 @@ jobs:
           script: |
             set -e
             cd /home/ubuntu/app
-
+            
             NEW_VERSION=${{ env.NEW_VERSION }}
             echo "Deploying version: $NEW_VERSION"
-
-            # capture previous
-            if [ -L rest-demo.jar ]; then
-              PREV_JAR=$(readlink -f rest-demo.jar)
-              echo "Previous JAR: $PREV_JAR"
+            
+            ACTIVE=$(cat active_env)
+            
+            if [ "$ACTIVE" = "blue" ]; then
+              TARGET="green"
+              TARGET_PORT=8081
+              TARGET_SERVICE="rest-demo-green"
+              OLD_SERVICE="rest-demo-blue"
             else
-              PREV_JAR=""
+              TARGET="blue"
+              TARGET_PORT=8080
+              TARGET_SERVICE="rest-demo-blue"
+              OLD_SERVICE="rest-demo-green"
             fi
-
-            # move new jar
-            NEW_JAR="rest-demo-${NEW_VERSION}.jar"
-            mv -f /home/ubuntu/rest-demo.jar $NEW_JAR
-            ln -sfn $NEW_JAR rest-demo.jar
-
-            echo "Starting service..."
+            
+            echo "Active: $ACTIVE"
+            echo "Deploying to: $TARGET"
+            
+            NEW_JAR="rest-demo-$TARGET.jar"
+            mv /home/ubuntu/rest-demo.jar $NEW_JAR
+            
+            echo "Starting $TARGET_SERVICE"
             sudo systemctl daemon-reload
-            sudo systemctl restart rest-demo
-
-            source .env
-            echo "Using port: $APP_PORT"
-
+            sudo systemctl restart $TARGET_SERVICE
+            
+            echo "Health check on port $TARGET_PORT"
             HEALTH_OK=false
             for i in {1..10}; do
-              RESPONSE=$(curl -s http://localhost:$APP_PORT/actuator/health || true)
+              RESPONSE=$(curl -s http://localhost:$TARGET_PORT/actuator/health || true)
               echo "Attempt $i: $RESPONSE"
               if echo "$RESPONSE" | grep -q '"status":"UP"'; then
                 HEALTH_OK=true
@@ -112,20 +191,22 @@ jobs:
               fi
               sleep 5
             done
-
+            
             if [ "$HEALTH_OK" != "true" ]; then
               echo "Health check failed"
-
-              if [ ! -z "$PREV_JAR" ]; then
-                echo "Rolling back to $PREV_JAR"
-                ln -sfn "$PREV_JAR" rest-demo.jar
-                sudo systemctl restart rest-demo
-              fi
-
+              sudo systemctl stop $TARGET_SERVICE
               exit 1
             fi
-
+            
+            echo "Switching nginx to $TARGET_PORT"
+            sudo sed -i "s/localhost:[0-9]*/localhost:$TARGET_PORT/" /etc/nginx/sites-available/default
+            sudo nginx -t
+            sudo systemctl reload nginx
+            
+            echo $TARGET > active_env
+            
+            echo "Stopping old service $OLD_SERVICE"
+            sudo systemctl stop $OLD_SERVICE
+            
             echo "Deployment successful"
 
-            # cleanup old jars (keep last 5)
-            ls -t rest-demo-*.jar | tail -n +6 | xargs -r rm -f
