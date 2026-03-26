@@ -28,13 +28,11 @@ jobs:
 
       - name: Build with Maven
         run: |
-            mvn clean package -Dspring.profiles.active=test
-            echo "Built JAR timestamp:"
-            ls -lh target/rest-demo.jar
-            echo "Checking compiled class timestamps:"
-            unzip -p target/rest-demo.jar BOOT-INF/classes/com/example/restdemo/YourController.class | file -
-            echo "Git commit in this build:"
-            git log -1 --oneline
+          mvn clean package -Dspring.profiles.active=test
+          ls -lh target/rest-demo.jar
+          echo "Git commit:"
+          git log -1 --oneline
+          echo "NEW_VERSION=$(git rev-parse --short HEAD)" >> $GITHUB_ENV
 
       - name: Stop App
         uses: appleboy/ssh-action@v1.0.3
@@ -71,41 +69,64 @@ jobs:
             EOF
             chmod 600 /home/ubuntu/app/.env
 
-      - name: Move JAR and Start App
+      - name: Deploy + Health Check + Rollback
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          NEW_VERSION: ${{ env.NEW_VERSION }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Move new JAR into place
-            mv -f /home/ubuntu/rest-demo.jar /home/ubuntu/app/rest-demo.jar
-            echo "JAR details:"
-            ls -lh /home/ubuntu/app/rest-demo.jar
-            
-            # Reload and start
-            sudo systemctl daemon-reload
-            sudo systemctl start rest-demo
-            sleep 3
-            sudo systemctl status rest-demo --no-pager
+            set -e
+            cd /home/ubuntu/app
 
-      - name: Health Check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
+            echo "Deploying version: $NEW_VERSION"
+
+            # Capture previous jar
+            if [ -L rest-demo.jar ]; then
+              PREV_JAR=$(readlink -f rest-demo.jar)
+              echo "Previous JAR: $PREV_JAR"
+            else
+              PREV_JAR=""
+            fi
+
+            # Move new jar
+            NEW_JAR="rest-demo-${NEW_VERSION}.jar"
+            mv -f /home/ubuntu/rest-demo.jar $NEW_JAR
+            ln -sfn $NEW_JAR rest-demo.jar
+
+            echo "Starting service..."
+            sudo systemctl daemon-reload
+            sudo systemctl restart rest-demo
+
             source /home/ubuntu/app/.env
             echo "Using port: $APP_PORT"
+
+            HEALTH_OK=false
             for i in {1..10}; do
               RESPONSE=$(curl -s http://localhost:$APP_PORT/actuator/health || true)
+              echo "Attempt $i: $RESPONSE"
               if echo "$RESPONSE" | grep -q '"status":"UP"'; then
-                echo "Application healthy"
-                exit 0
+                HEALTH_OK=true
+                break
               fi
-              echo "Waiting... attempt $i"
               sleep 5
             done
-            echo "Application not healthy"
-            exit 1
+
+            if [ "$HEALTH_OK" != "true" ]; then
+              echo "Health check failed"
+
+              if [ ! -z "$PREV_JAR" ]; then
+                echo "Rolling back to $PREV_JAR"
+                ln -sfn "$PREV_JAR" rest-demo.jar
+                sudo systemctl restart rest-demo
+                echo "Rollback complete"
+              else
+                echo "No previous version available"
+              fi
+
+              exit 1
+            fi
+
+            echo "Deployment successful"
