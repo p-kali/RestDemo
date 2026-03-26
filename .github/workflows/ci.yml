@@ -87,3 +87,22 @@ jobs:
             sudo systemctl start rest-demo
             sleep 3
             sudo systemctl status rest-demo --no-pager
+
+      - name: Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "Detecting app port..."
+            PORT=$(ss -ltnp | grep java | awk '{print $4}' | awk -F: '{print $NF}' | head -1)
+            echo "Detected port: $PORT"
+            sleep 10
+            STATUS=$(curl -s http://localhost:$PORT/actuator/health | grep UP || true)
+            if [ -z "$STATUS" ]; then
+              echo "Application not healthy"
+              exit 1
+            else
+              echo "Application healthy"
+            fi

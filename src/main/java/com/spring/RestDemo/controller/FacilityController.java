@@ -3,6 +3,7 @@ package com.spring.RestDemo.controller;
 import com.spring.RestDemo.dto.FacilityRequest;
 import com.spring.RestDemo.dto.FacilityResponse;
 import com.spring.RestDemo.service.FacilityService;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ public class FacilityController {
         this.facilityService = facilityService;
     }
 
+    @Operation(summary = "Get all facilites")
     @GetMapping
     public ResponseEntity<List<FacilityResponse>> getAll() {
         List<FacilityResponse> list = facilityService.getAllFacilities();
@@ -32,6 +34,7 @@ public class FacilityController {
      * @param id the identifier of the facility to retrieve
      * @return ResponseEntity containing the FacilityResponse or a 404 status
     */
+    @Operation(summary = "Get facilites by ID")
     @GetMapping("/{id}")
     public ResponseEntity<FacilityResponse> getById(@PathVariable Long id) {
         FacilityResponse resp = facilityService.getFacilityById(id);
@@ -42,6 +45,7 @@ public class FacilityController {
     }
 
     // Create facility - accept FacilityRequest and return 201 Created
+    @Operation(summary = "Create facilities")
     @PostMapping
     public ResponseEntity<FacilityResponse> createFacility(@Valid @RequestBody FacilityRequest request) {
         // creation will assign id; return created resource with Location header
