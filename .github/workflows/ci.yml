@@ -28,9 +28,13 @@ jobs:
 
       - name: Build with Maven
         run: |
-          mvn clean package -Dspring.profiles.active=test
-          echo "Built JAR:"
-          ls -lh target/rest-demo.jar
+            mvn clean package -Dspring.profiles.active=test
+            echo "Built JAR timestamp:"
+            ls -lh target/rest-demo.jar
+            echo "Checking compiled class timestamps:"
+            unzip -p target/rest-demo.jar BOOT-INF/classes/com/example/restdemo/YourController.class | file -
+            echo "Git commit in this build:"
+            git log -1 --oneline
 
       - name: Stop App
         uses: appleboy/ssh-action@v1.0.3
@@ -52,6 +56,20 @@ jobs:
           target: "/home/ubuntu/"
           strip_components: 1
 
+      - name: Write env file on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            cat > /home/ubuntu/app/.env << 'EOF'
+            DB_URL=${{ secrets.DB_URL }}
+            DB_USERNAME=${{ secrets.DB_USERNAME }}
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            EOF
+            chmod 600 /home/ubuntu/app/.env
+
       - name: Move JAR and Start App
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -63,7 +81,7 @@ jobs:
             mv -f /home/ubuntu/rest-demo.jar /home/ubuntu/app/rest-demo.jar
             echo "JAR details:"
             ls -lh /home/ubuntu/app/rest-demo.jar
-
+            
             # Reload and start
             sudo systemctl daemon-reload
             sudo systemctl start rest-demo
