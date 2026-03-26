@@ -29,5 +29,5 @@ management:
   endpoint:
     health:
       show-details: always
-  server:
-    port: ${MANAGEMENT_PORT:${server.port}}
+#  server:
+#    port: ${MANAGEMENT_PORT:${server.port}}
