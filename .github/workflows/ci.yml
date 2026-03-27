@@ -173,8 +173,10 @@ jobs:
             echo "Active: $ACTIVE"
             echo "Deploying to: $TARGET"
             
-            NEW_JAR="rest-demo-$TARGET.jar"
-            mv /home/ubuntu/rest-demo.jar $NEW_JAR
+            VERSION_JAR="rest-demo-${NEW_VERSION}.jar"
+            mv /home/ubuntu/rest-demo.jar $VERSION_JAR
+  
+            ln -sfn $VERSION_JAR rest-demo-$TARGET.jar
             
             echo "Starting $TARGET_SERVICE"
             sudo systemctl daemon-reload
@@ -209,4 +211,7 @@ jobs:
             sudo systemctl stop $OLD_SERVICE
             
             echo "Deployment successful"
+            
+            # cleanup old jars (keep last 5)
+            ls -t rest-demo-*.jar | tail -n +6 | xargs -r rm -f
 
