@@ -150,7 +150,11 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            set -e
+            set -euo pipefail
+            
+            DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+            echo "Deployment time: $DEPLOY_TIME"
+            
             cd /home/ubuntu/app
             
             NEW_VERSION=${{ env.NEW_VERSION }}
@@ -182,10 +186,13 @@ jobs:
             sudo systemctl daemon-reload
             sudo systemctl restart $TARGET_SERVICE
             
+            echo "Checking service status..."
+            sudo systemctl status $TARGET_SERVICE --no-pager
+            
             echo "Health check on port $TARGET_PORT"
             HEALTH_OK=false
             for i in {1..10}; do
-              RESPONSE=$(curl -s http://localhost:$TARGET_PORT/actuator/health || true)
+              RESPONSE=$(curl -s -m 3 http://localhost:$TARGET_PORT/actuator/health || true)
               echo "Attempt $i: $RESPONSE"
               if echo "$RESPONSE" | grep -q '"status":"UP"'; then
                 HEALTH_OK=true
@@ -202,8 +209,13 @@ jobs:
             
             echo "Switching nginx to $TARGET_PORT"
             sudo sed -i "s/localhost:[0-9]*/localhost:$TARGET_PORT/" /etc/nginx/sites-available/default
-            sudo nginx -t
-            sudo systemctl reload nginx
+            if sudo nginx -t; then
+              sudo systemctl reload nginx
+            else
+              echo "Nginx config failed — not switching traffic"
+              sudo systemctl stop $TARGET_SERVICE
+              exit 1
+            fi
             
             echo $TARGET > active_env
             
@@ -212,6 +224,19 @@ jobs:
             
             echo "Deployment successful"
             
+            echo "$DEPLOY_TIME - Deploying $NEW_VERSION to $TARGET" >> deploy-history.log
+            
             # cleanup old jars (keep last 5)
-            ls -t rest-demo-*.jar | tail -n +6 | xargs -r rm -f
+            ls -t rest-demo-*.jar \
+            | grep -v "$(readlink rest-demo-blue.jar)" \
+            | grep -v "$(readlink rest-demo-green.jar)" \
+            | tail -n +6 | xargs -r rm -f
+            
+            echo "================================="
+            echo "Deployment Summary"
+            echo "Version : $NEW_VERSION"
+            echo "Target  : $TARGET"
+            echo "Port    : $TARGET_PORT"
+            echo "Time    : $DEPLOY_TIME"
+            echo "================================="
 
