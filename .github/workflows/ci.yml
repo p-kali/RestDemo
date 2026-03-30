@@ -26,6 +26,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-m2
 
+      #Dspring.profiles.active=test because application-test.yaml file has H2 in-mem database config
       - name: Build with Maven
         run: |
           mvn clean package -Dspring.profiles.active=test
