@@ -68,21 +68,24 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             set -euo pipefail
-
+            
             DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
             echo "Deployment time: $DEPLOY_TIME"
-
+            
             cd /home/ubuntu
-
+            
             aws ecr get-login-password --region us-east-1 \
             | docker login \
             --username AWS \
             --password-stdin 193849564091.dkr.ecr.us-east-1.amazonaws.com
-
+            
             docker pull 193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
-
+            
             ACTIVE=$(cat active_env)
-
+            CURRENT_SHA=$(cat active_sha)
+            
+            echo "$CURRENT_SHA" > previous_sha
+            
             if [ "$ACTIVE" = "blue" ]; then
               TARGET="green"
               TARGET_PORT=8081
@@ -90,58 +93,76 @@ jobs:
               TARGET="blue"
               TARGET_PORT=8080
             fi
-
-            echo "Active: $ACTIVE"
-            echo "Deploying to: $TARGET"
-
-            # cleanup target if exists
+            
+            echo "Deploying to $TARGET on port $TARGET_PORT"
+            
             docker rm -f rest-demo-$TARGET || true
-
+            
             docker run -d \
               -p $TARGET_PORT:8080 \
               --name rest-demo-$TARGET \
               --restart unless-stopped \
               --env-file .env \
               193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
-
-            echo "Health check on port $TARGET_PORT"
-
+            
+            # -----------------------------------
+            # HEALTH CHECK
+            # -----------------------------------
             HEALTH_OK=false
-            for i in {1..10}; do
+            for i in {1..12}; do
               RESPONSE=$(curl -s -m 3 http://localhost:$TARGET_PORT/actuator/health || true)
               echo "Attempt $i: $RESPONSE"
+          
               if echo "$RESPONSE" | grep -q '"status":"UP"'; then
                 HEALTH_OK=true
                 break
               fi
               sleep 5
             done
-
+            
+            FINAL_PORT=$TARGET_PORT
+            FINAL_ENV=$TARGET
+            FINAL_SHA=${{ env.SHORT_SHA }}
+          
+            # -----------------------------------
+            # ROLLBACK DECISION
+            # -----------------------------------
             if [ "$HEALTH_OK" != "true" ]; then
-              echo "Health check failed"
-              docker stop rest-demo-$TARGET
-              exit 1
+              echo "Health failed — rolling back"
+        
+              docker stop rest-demo-$TARGET || true
+              docker rm rest-demo-$TARGET || true
+        
+              PREVIOUS_SHA=$(cat previous_sha)
+        
+              docker run -d \
+                -p $TARGET_PORT:8080 \
+                --name rest-demo-$TARGET \
+                --restart unless-stopped \
+                --env-file .env \
+                193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
+        
+              FINAL_SHA=$PREVIOUS_SHA
             fi
-
-            echo "Switching nginx to $TARGET_PORT"
-
-            sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$TARGET_PORT;|" /etc/nginx/sites-available/default
-
-            if sudo nginx -t; then
-              sudo systemctl reload nginx
-            else
-              echo "Nginx config failed — not switching traffic"
-              docker stop rest-demo-$TARGET
-              exit 1
-            fi
-
-            echo $TARGET > active_env
-
-            echo "Stopping old service $ACTIVE"
+            
+            echo "Switching traffic to port $FINAL_PORT"
+            
+            sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$FINAL_PORT;|" /etc/nginx/sites-available/default
+            
+            sudo nginx -t
+            sudo systemctl reload nginx
+            
+            echo $FINAL_ENV > active_env
+            echo $FINAL_SHA > active_sha
+            
+            # -----------------------------------
+            # STOP OLD
+            # -----------------------------------
             docker stop rest-demo-$ACTIVE || true
             docker rm rest-demo-$ACTIVE || true
-
+            
             docker image prune -f
-
-            echo "Deployment successful"
-            echo "$DEPLOY_TIME - Deploying rest-demo:${{ env.SHORT_SHA }}" >> deploy-history.log
+            
+            echo "$DEPLOY_TIME - Deploy successful - SHA $FINAL_SHA - ENV $FINAL_ENV" >> deploy-history.log
+            
+            echo "Deployment complete"
