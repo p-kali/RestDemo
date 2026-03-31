@@ -74,6 +74,9 @@ jobs:
             
             cd /home/ubuntu
             
+            # -----------------------------
+            # AWS ECR Login
+            # -----------------------------
             aws ecr get-login-password --region us-east-1 \
             | docker login \
             --username AWS \
@@ -81,11 +84,21 @@ jobs:
             
             docker pull 193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
             
+            # -----------------------------
+            # Read active deployment and SHA
+            # -----------------------------
             ACTIVE=$(cat active_env)
             CURRENT_SHA=$(cat active_sha)
-            
+          
+            echo "Current active env: $ACTIVE"
+            echo "Current active SHA: $CURRENT_SHA"
+          
+            # Save  previous SHA for rollback
             echo "$CURRENT_SHA" > previous_sha
             
+            # -----------------------------
+            # Determine target environment
+            # -----------------------------
             if [ "$ACTIVE" = "blue" ]; then
               TARGET="green"
               TARGET_PORT=8081
@@ -93,26 +106,42 @@ jobs:
               TARGET="blue"
               TARGET_PORT=8080
             fi
+          
+            echo "Deploying to: $TARGET on port $TARGET_PORT"
+          
+            # -----------------------------
+            # Fetch secrets from Parameter Store
+            # -----------------------------
+            echo "Fetching secrets from AWS Parameter Store"
             
-            echo "Deploying to $TARGET on port $TARGET_PORT"
+            DB_URL=$(aws ssm get-parameter --name "/rest-demo/DB_URL" --with-decryption --query "Parameter.Value" --output text)
+            DB_USERNAME=$(aws ssm get-parameter --name "/rest-demo/DB_USERNAME" --with-decryption --query "Parameter.Value" --output text)
+            DB_PASSWORD=$(aws ssm get-parameter --name "/rest-demo/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
             
+            # -----------------------------
+            # Cleanup target container if exists
+            # -----------------------------
             docker rm -f rest-demo-$TARGET || true
             
+            # -----------------------------
+            # Run new container
+            # -----------------------------
             docker run -d \
               -p $TARGET_PORT:8080 \
               --name rest-demo-$TARGET \
               --restart unless-stopped \
-              --env-file .env \
+              -e DB_URL="$DB_URL" \
+              -e DB_USERNAME="$DB_USERNAME" \
+              -e DB_PASSWORD="$DB_PASSWORD" \
               193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
             
-            # -----------------------------------
-            # HEALTH CHECK
-            # -----------------------------------
+            # -----------------------------
+            # Health check
+            # -----------------------------
             HEALTH_OK=false
             for i in {1..12}; do
               RESPONSE=$(curl -s -m 3 http://localhost:$TARGET_PORT/actuator/health || true)
               echo "Attempt $i: $RESPONSE"
-          
               if echo "$RESPONSE" | grep -q '"status":"UP"'; then
                 HEALTH_OK=true
                 break
@@ -123,28 +152,34 @@ jobs:
             FINAL_PORT=$TARGET_PORT
             FINAL_ENV=$TARGET
             FINAL_SHA=${{ env.SHORT_SHA }}
-          
-            # -----------------------------------
-            # ROLLBACK DECISION
-            # -----------------------------------
+            
+            # -----------------------------
+            # Rollback if health check fails
+            # -----------------------------
             if [ "$HEALTH_OK" != "true" ]; then
-              echo "Health failed — rolling back"
-        
+              echo "Health check failed — rolling back"
+            
               docker stop rest-demo-$TARGET || true
-              docker rm rest-demo-$TARGET || true
-        
+              docker rm -f rest-demo-$TARGET || true
+            
               PREVIOUS_SHA=$(cat previous_sha)
-        
+              echo "Rolling back to previous SHA: $PREVIOUS_SHA"
+            
               docker run -d \
                 -p $TARGET_PORT:8080 \
                 --name rest-demo-$TARGET \
                 --restart unless-stopped \
-                --env-file .env \
+                -e DB_URL="$DB_URL" \
+                -e DB_USERNAME="$DB_USERNAME" \
+                -e DB_PASSWORD="$DB_PASSWORD" \
                 193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
-        
+            
               FINAL_SHA=$PREVIOUS_SHA
             fi
             
+            # -----------------------------
+            # Switch Nginx (single reload)
+            # -----------------------------
             echo "Switching traffic to port $FINAL_PORT"
             
             sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$FINAL_PORT;|" /etc/nginx/sites-available/default
@@ -152,17 +187,26 @@ jobs:
             sudo nginx -t
             sudo systemctl reload nginx
             
+            # -----------------------------
+            # Mark new active environment
+            # -----------------------------
             echo $FINAL_ENV > active_env
             echo $FINAL_SHA > active_sha
             
-            # -----------------------------------
-            # STOP OLD
-            # -----------------------------------
+            # -----------------------------
+            # Stop old container
+            # -----------------------------
             docker stop rest-demo-$ACTIVE || true
-            docker rm rest-demo-$ACTIVE || true
+            docker rm -f rest-demo-$ACTIVE || true
             
+            # -----------------------------
+            # Cleanup dangling images
+            # -----------------------------
             docker image prune -f
             
+            # -----------------------------
+            # Log deployment
+            # -----------------------------
             echo "$DEPLOY_TIME - Deploy successful - SHA $FINAL_SHA - ENV $FINAL_ENV" >> deploy-history.log
             
             echo "Deployment complete"
