@@ -32,13 +32,15 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "App port"
-    from_port = 8080
-    to_port = 8081
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # App will be run in containers
+  # Since containers are internal, no need to open the port to public
+  # ingress {
+  #   description = "App port"
+  #   from_port = 8080
+  #   to_port = 8081
+  #   protocol = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
   egress {
     from_port = 0
@@ -52,6 +54,42 @@ resource "aws_security_group" "app_sg" {
   }
 }
 
+#Role
+resource "aws_iam_role" "ec2_role" {
+  name = "devops-ec2-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+#Policy ECR read
+resource "aws_iam_role_policy_attachment" "ecr_read" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+#Policy SSM read
+resource "aws_iam_role_policy_attachment" "ssm_read" {
+  role       = aws_iam_role.ec2_role.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
+}
+
+#Create profile/role
+resource "aws_iam_instance_profile" "ec2_profile" {
+  name = "devops-ec2-profile"
+  role = aws_iam_role.ec2_role.name
+}
+
 resource "aws_instance" "devops_demo_ec2" {
   #ami = "ami-0ec10929233384c7f"
   #instance_type = "t3.micro"
@@ -60,6 +98,7 @@ resource "aws_instance" "devops_demo_ec2" {
   instance_type = var.instance_type
   key_name = var.key_name
   vpc_security_group_ids = [aws_security_group.app_sg.id]
+  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
   tags = {
     Name = "devops-demo-ec2"
   }
@@ -79,6 +118,12 @@ resource "aws_instance" "devops_demo_ec2" {
               systemctl start docker
               systemctl enable docker
               usermod -aG docker ubuntu
+
+              # Install AWS CLI  <-- ADD HERE
+              apt-get install -y unzip curl
+              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              unzip awscliv2.zip
+              sudo ./aws/install
 
               # Install Java
               apt-get install -y openjdk-17-jre-headless
@@ -110,6 +155,20 @@ resource "aws_instance" "devops_demo_ec2" {
               nginx -v
               java -version
 
+              mkdir -p /home/ubuntu/app
+
+              cd /home/ubuntu
+
+              echo "blue" > active_env
+              echo "initial" > active_sha
+              echo "initial" > previous_sha
+              touch deploy-history.log
+
+              #chown -R ubuntu:ubuntu /home/ubuntu
+              chown ubuntu:ubuntu /home/ubuntu/active_env
+              chown ubuntu:ubuntu /home/ubuntu/active_sha
+              chown ubuntu:ubuntu /home/ubuntu/previous_sha
+              chown ubuntu:ubuntu /home/ubuntu/deploy-history.log
 
               EOF
 }
@@ -127,9 +186,20 @@ resource "aws_eip_association" "devops_eip_assoc" {
   allocation_id = aws_eip.devops_eip.id
 }
 
+resource "aws_security_group_rule" "allow_ec2_to_rds" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = var.rds_security_group_id
+  source_security_group_id = aws_security_group.app_sg.id
+}
+
 output "app_ip" {
   value = aws_instance.devops_demo_ec2.public_ip
 }
+
+#Copy Elastic IP address to EC2_HOST in GitHub Actions for CICD
 output "elastic_ip" {
   value = aws_eip.devops_eip.public_ip
 }

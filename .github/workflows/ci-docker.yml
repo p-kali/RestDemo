@@ -163,18 +163,25 @@ jobs:
               docker rm -f rest-demo-$TARGET || true
             
               PREVIOUS_SHA=$(cat previous_sha)
-              echo "Rolling back to previous SHA: $PREVIOUS_SHA"
+              if [ "$PREVIOUS_SHA" = "initial" ]; then
+                echo "First deployment = no rollback needed"
+                HEALTH_OK=true # continue with deployment
+              else
+                if [ "$HEALTH_OK" != "true" ]; then
+                  echo "Rolling back to previous SHA: $PREVIOUS_SHA"
             
-              docker run -d \
-                -p $TARGET_PORT:8080 \
-                --name rest-demo-$TARGET \
-                --restart unless-stopped \
-                -e DB_URL="$DB_URL" \
-                -e DB_USERNAME="$DB_USERNAME" \
-                -e DB_PASSWORD="$DB_PASSWORD" \
-                193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
-            
-              FINAL_SHA=$PREVIOUS_SHA
+                  docker run -d \
+                    -p $TARGET_PORT:8080 \
+                    --name rest-demo-$TARGET \
+                    --restart unless-stopped \
+                    -e DB_URL="$DB_URL" \
+                    -e DB_USERNAME="$DB_USERNAME" \
+                    -e DB_PASSWORD="$DB_PASSWORD" \
+                    193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
+                
+                  FINAL_SHA=$PREVIOUS_SHA
+                fi
+              fi
             fi
             
             # -----------------------------
@@ -182,7 +189,7 @@ jobs:
             # -----------------------------
             echo "Switching traffic to port $FINAL_PORT"
             
-            sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$FINAL_PORT;|" /etc/nginx/sites-available/default
+            sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$FINAL_PORT;|" /etc/nginx/sites-available/devops-app
             
             sudo nginx -t
             sudo systemctl reload nginx

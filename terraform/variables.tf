@@ -13,3 +13,7 @@ variable "key_name" {
 variable "ami_id" {
   description = "Ubuntu AMI"
 }
+
+variable "rds_security_group_id" {
+  description = "RDS Security group ID"
+}
