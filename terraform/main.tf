@@ -32,13 +32,15 @@ resource "aws_security_group" "app_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  ingress {
-    description = "App port"
-    from_port = 8080
-    to_port = 8081
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # App will be run in containers
+  # Since containers are internal, no need to open the port to public
+  # ingress {
+  #   description = "App port"
+  #   from_port = 8080
+  #   to_port = 8081
+  #   protocol = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
   egress {
     from_port = 0
@@ -110,6 +112,15 @@ resource "aws_instance" "devops_demo_ec2" {
               nginx -v
               java -version
 
+              mkdir -p /home/ubuntu/app
+
+              cd /home/ubuntu
+
+              echo "blue" > active_env
+              echo "initial" > active_sha
+              echo "initial" > previous_sha
+
+              touch deploy-history.log
 
               EOF
 }

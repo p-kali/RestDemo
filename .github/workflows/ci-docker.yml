@@ -182,7 +182,7 @@ jobs:
             # -----------------------------
             echo "Switching traffic to port $FINAL_PORT"
             
-            sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$FINAL_PORT;|" /etc/nginx/sites-available/default
+            sudo sed -i "s|proxy_pass http://localhost:.*|proxy_pass http://localhost:$FINAL_PORT;|" /etc/nginx/sites-available/devops-app
             
             sudo nginx -t
             sudo systemctl reload nginx
