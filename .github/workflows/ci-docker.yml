@@ -164,21 +164,24 @@ jobs:
             
               PREVIOUS_SHA=$(cat previous_sha)
               if [ "$PREVIOUS_SHA" = "initial" ]; then
-                echo "No previous deployment available — first deployment failed"
-                exit 1
+                echo "First deployment = no rollback needed"
+                HEALTH_OK=true # continue with deployment
+              else
+                if [ "$HEALTH_OK" != "true" ]; then
+                  echo "Rolling back to previous SHA: $PREVIOUS_SHA"
+            
+                  docker run -d \
+                    -p $TARGET_PORT:8080 \
+                    --name rest-demo-$TARGET \
+                    --restart unless-stopped \
+                    -e DB_URL="$DB_URL" \
+                    -e DB_USERNAME="$DB_USERNAME" \
+                    -e DB_PASSWORD="$DB_PASSWORD" \
+                    193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
+                
+                  FINAL_SHA=$PREVIOUS_SHA
+                fi
               fi
-              echo "Rolling back to previous SHA: $PREVIOUS_SHA"
-            
-              docker run -d \
-                -p $TARGET_PORT:8080 \
-                --name rest-demo-$TARGET \
-                --restart unless-stopped \
-                -e DB_URL="$DB_URL" \
-                -e DB_USERNAME="$DB_USERNAME" \
-                -e DB_PASSWORD="$DB_PASSWORD" \
-                193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
-            
-              FINAL_SHA=$PREVIOUS_SHA
             fi
             
             # -----------------------------
