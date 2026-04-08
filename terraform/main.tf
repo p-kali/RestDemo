@@ -186,9 +186,20 @@ resource "aws_eip_association" "devops_eip_assoc" {
   allocation_id = aws_eip.devops_eip.id
 }
 
+resource "aws_security_group_rule" "allow_ec2_to_rds" {
+  type                     = "ingress"
+  from_port                = 5432
+  to_port                  = 5432
+  protocol                 = "tcp"
+  security_group_id        = var.rds_security_group_id
+  source_security_group_id = aws_security_group.app_sg.id
+}
+
 output "app_ip" {
   value = aws_instance.devops_demo_ec2.public_ip
 }
+
+#Copy Elastic IP address to EC2_HOST in GitHub Actions for CICD
 output "elastic_ip" {
   value = aws_eip.devops_eip.public_ip
 }
