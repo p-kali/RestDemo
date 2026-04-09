@@ -116,16 +116,21 @@ jobs:
             # -----------------------------
             # Run new container
             # -----------------------------
-            docker run -d \
-              -p $TARGET_PORT:8080 \
-              --name rest-demo \
-              --restart unless-stopped \
+              docker run -d \
+                -p $TARGET_PORT:8080 \
+                --name rest-demo \
+                --restart unless-stopped \
+                193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
+#            docker run -d \
+#              -p $TARGET_PORT:8080 \
+#              --name rest-demo \
+#              --restart unless-stopped \
 #              -e DB_URL="$DB_URL" \
 #              -e DB_USERNAME="$DB_USERNAME" \
 #              -e DB_PASSWORD="$DB_PASSWORD" \
 #              -e DB_DRIVER="$DB_DRIVER" \
 #              -e DB_DIALECT="$DB_DIALECT" \
-              193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
+#              193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
             
             # -----------------------------
             # Health check
