@@ -161,14 +161,19 @@ jobs:
               if [ "$PREVIOUS_SHA" != "none" ]; then
                 PREVIOUS_SHA=$(cat previous_sha)
                 echo "Rolling back to previous SHA: $PREVIOUS_SHA"
-              
+
+#                docker run -d \
+#                  -p $TARGET_PORT:8080 \
+#                  --name rest-demo \
+#                  --restart unless-stopped \
+#                  -e DB_URL="$DB_URL" \
+#                  -e DB_USERNAME="$DB_USERNAME" \
+#                  -e DB_PASSWORD="$DB_PASSWORD" \
+#                  193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
                 docker run -d \
                   -p $TARGET_PORT:8080 \
                   --name rest-demo \
                   --restart unless-stopped \
-                  -e DB_URL="$DB_URL" \
-                  -e DB_USERNAME="$DB_USERNAME" \
-                  -e DB_PASSWORD="$DB_PASSWORD" \
                   193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
               else
                 echo "Initial deployment failed"
