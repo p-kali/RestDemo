@@ -117,6 +117,8 @@ jobs:
             DB_URL=$(aws ssm get-parameter --name "/rest-demo/DB_URL" --with-decryption --query "Parameter.Value" --output text)
             DB_USERNAME=$(aws ssm get-parameter --name "/rest-demo/DB_USERNAME" --with-decryption --query "Parameter.Value" --output text)
             DB_PASSWORD=$(aws ssm get-parameter --name "/rest-demo/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
+            DB_DRIVER=$(aws ssm get-parameter --name "/rest-demo/DB_DRIVER" --with-decryption --query "Parameter.Value" --output text)
+            DB_DIALECT=$(aws ssm get-parameter --name "/rest-demo/DB_DIALECT" --with-decryption --query "Parameter.Value" --output text)
             
             # -----------------------------
             # Cleanup target container if exists

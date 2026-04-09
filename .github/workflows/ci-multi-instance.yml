@@ -1,4 +1,4 @@
-name: RestDemo Docker CI
+name: RestDemo Docker VPC CI
 
 on:
   push:
@@ -102,9 +102,11 @@ jobs:
             # -----------------------------
             echo "Fetching secrets from AWS Parameter Store"
             
-            DB_URL=$(aws ssm get-parameter --name "/rest-demo/DB_URL" --with-decryption --query "Parameter.Value" --output text)
-            DB_USERNAME=$(aws ssm get-parameter --name "/rest-demo/DB_USERNAME" --with-decryption --query "Parameter.Value" --output text)
-            DB_PASSWORD=$(aws ssm get-parameter --name "/rest-demo/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
+#            DB_URL=$(aws ssm get-parameter --name "/rest-demo/DB_URL" --with-decryption --query "Parameter.Value" --output text)
+#            DB_USERNAME=$(aws ssm get-parameter --name "/rest-demo/DB_USERNAME" --with-decryption --query "Parameter.Value" --output text)
+#            DB_PASSWORD=$(aws ssm get-parameter --name "/rest-demo/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
+#            DB_DRIVER=$(aws ssm get-parameter --name "/rest-demo/DB_DRIVER" --with-decryption --query "Parameter.Value" --output text)
+#            DB_DIALECT=$(aws ssm get-parameter --name "/rest-demo/DB_DIALECT" --with-decryption --query "Parameter.Value" --output text)
             
             # -----------------------------
             # Cleanup container if exists
@@ -118,9 +120,11 @@ jobs:
               -p $TARGET_PORT:8080 \
               --name rest-demo \
               --restart unless-stopped \
-              -e DB_URL="$DB_URL" \
-              -e DB_USERNAME="$DB_USERNAME" \
-              -e DB_PASSWORD="$DB_PASSWORD" \
+#              -e DB_URL="$DB_URL" \
+#              -e DB_USERNAME="$DB_USERNAME" \
+#              -e DB_PASSWORD="$DB_PASSWORD" \
+#              -e DB_DRIVER="$DB_DRIVER" \
+#              -e DB_DIALECT="$DB_DIALECT" \
               193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
             
             # -----------------------------

@@ -72,6 +72,8 @@ jobs:
             DB_URL=${{ secrets.DB_URL }}
             DB_USERNAME=${{ secrets.DB_USERNAME }}
             DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_DRIVER=${{ secrets.DB_DRIVER }}
+            DB_DIALECT=${{ secrets.DB_DIALECT }}
             EOF
             chmod 600 /home/ubuntu/app/.env
       
