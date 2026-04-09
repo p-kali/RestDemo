@@ -15,6 +15,7 @@ provider "aws" {
 resource "aws_security_group" "app_sg" {
   name = "devops-demo-app-sg"
   description = "Allow SSH and App traffic"
+  vpc_id = aws_vpc.devops_vpc.id
 
   ingress {
     description = "App port"
@@ -60,6 +61,7 @@ resource "aws_instance" "devops_demo_ec2" {
   instance_type = var.instance_type
   key_name = var.key_name
   vpc_security_group_ids = [aws_security_group.app_sg.id]
+  subnet_id = aws_subnet.public_subnet_1.id
   tags = {
     Name = "devops-demo-ec2"
   }
@@ -83,33 +85,9 @@ resource "aws_instance" "devops_demo_ec2" {
               # Install Java
               apt-get install -y openjdk-17-jre-headless
 
-              # Install Nginx
-              apt-get install -y nginx
-              systemctl start nginx
-              systemctl enable nginx
-
-              # Configure Nginx reverse proxy
-              cat <<EOF2 > /etc/nginx/sites-available/devops-app
-              server {
-                  listen 80;
-
-                  location / {
-                      proxy_pass http://localhost:8080;
-                      proxy_set_header Host \$host;
-                      proxy_set_header X-Real-IP \$remote_addr;
-                  }
-              }
-              EOF2
-
-              ln -s /etc/nginx/sites-available/devops-app /etc/nginx/sites-enabled/
-              rm -f /etc/nginx/sites-enabled/default
-              systemctl restart nginx
-
               # Verify installations
               docker --version
-              nginx -v
               java -version
-
 
               EOF
 }
