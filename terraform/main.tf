@@ -93,6 +93,7 @@ resource "aws_instance" "devops_demo_ec2" {
   #ami = "ami-0ec10929233384c7f"
   #instance_type = "t3.micro"
   #key_name = "qa-key"
+  count = 2
   ami = var.ami_id
   instance_type = var.instance_type
   key_name = var.key_name
@@ -135,31 +136,34 @@ resource "aws_instance" "devops_demo_ec2" {
               EOF
 }
 
-# Create Elastic IP
-resource "aws_eip" "devops_eip" {
-  tags = {
-    Name = "devops-demo-eip"
-  }
+# # Create Elastic IP
+# resource "aws_eip" "devops_eip" {
+#   tags = {
+#     Name = "devops-demo-eip"
+#   }
+# }
+
+# # Associate EIP with EC2
+# resource "aws_eip_association" "devops_eip_assoc" {
+#   instance_id   = aws_instance.devops_demo_ec2.id
+#   allocation_id = aws_eip.devops_eip.id
+# }
+
+#  It won't work, because current RDS is in different VPC
+# resource "aws_security_group_rule" "allow_ec2_to_rds" {
+#   type                     = "ingress"
+#   from_port                = 5432
+#   to_port                  = 5432
+#   protocol                 = "tcp"
+#   security_group_id        = var.rds_security_group_id
+#   source_security_group_id = aws_security_group.app_sg.id
+# }
+
+output "app_ips" {
+  #value = aws_instance.devops_demo_ec2.public_ip #Single EC2 instance
+  value = aws_instance.devops_demo_ec2[*].public_ip
 }
 
-# Associate EIP with EC2
-resource "aws_eip_association" "devops_eip_assoc" {
-  instance_id   = aws_instance.devops_demo_ec2.id
-  allocation_id = aws_eip.devops_eip.id
-}
-
-resource "aws_security_group_rule" "allow_ec2_to_rds" {
-  type                     = "ingress"
-  from_port                = 5432
-  to_port                  = 5432
-  protocol                 = "tcp"
-  security_group_id        = var.rds_security_group_id
-  source_security_group_id = aws_security_group.app_sg.id
-}
-
-output "app_ip" {
-  value = aws_instance.devops_demo_ec2.public_ip
-}
-output "elastic_ip" {
-  value = aws_eip.devops_eip.public_ip
-}
+# output "elastic_ip" {
+#   value = aws_eip.devops_eip.public_ip
+# }

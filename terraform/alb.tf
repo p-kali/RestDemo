@@ -46,7 +46,7 @@ resource "aws_lb_target_group" "devops_tg" {
   vpc_id   = aws_vpc.devops_vpc.id
   target_type = "instance"
   health_check {
-    path                = "/"
+    path                = "/actuator/health"
     protocol            = "HTTP"
     interval            = 30
     healthy_threshold   = 2
@@ -58,8 +58,10 @@ resource "aws_lb_target_group" "devops_tg" {
   }
 }
 resource "aws_lb_target_group_attachment" "devops_tg_attach" {
+  count            = 2
   target_group_arn = aws_lb_target_group.devops_tg.arn
-  target_id        = aws_instance.devops_demo_ec2.id
+  #target_id        = aws_instance.devops_demo_ec2.id #Single EC2 instance
+  target_id        = aws_instance.devops_demo_ec2[count.index].id
   port             = 8080
 }
 resource "aws_lb_listener" "devops_listener" {

@@ -58,12 +58,149 @@ jobs:
           docker push 193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:latest
 
       # =====================================================
-      # Rolling Deploy
+      # Deploy First Instance
       # =====================================================
-      - name: Rolling Deploy
+      - name: Deploying first instance
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.EC2_HOST_ALB_1 }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            set -euo pipefail
+            
+            DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+            echo "Deployment time: $DEPLOY_TIME"
+            
+            cd /home/ubuntu
+            TARGET_PORT=8080
+            
+            # -----------------------------
+            # AWS ECR Login
+            # -----------------------------
+            aws ecr get-login-password --region us-east-1 \
+            | docker login \
+            --username AWS \
+            --password-stdin 193849564091.dkr.ecr.us-east-1.amazonaws.com
+            
+            docker pull 193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
+            
+            # -----------------------------
+            # Read active deployment and SHA
+            # -----------------------------
+            #CURRENT_SHA=$(cat active_sha)
+            CURRENT_SHA=$(cat active_sha 2>/dev/null || echo "none")
+            
+            echo "Current active SHA: $CURRENT_SHA"
+            
+            # Save  previous SHA for rollback
+            echo "$CURRENT_SHA" > previous_sha
+            PREVIOUS_SHA=$(cat previous_sha)
+            
+            # -----------------------------
+            # Fetch secrets from Parameter Store
+            # -----------------------------
+            echo "Fetching secrets from AWS Parameter Store"
+            
+            #DB_URL=$(aws ssm get-parameter --name "/rest-demo/DB_URL" --with-decryption --query "Parameter.Value" --output text)
+            #DB_USERNAME=$(aws ssm get-parameter --name "/rest-demo/DB_USERNAME" --with-decryption --query "Parameter.Value" --output text)
+            #DB_PASSWORD=$(aws ssm get-parameter --name "/rest-demo/DB_PASSWORD" --with-decryption --query "Parameter.Value" --output text)
+            #DB_DRIVER=$(aws ssm get-parameter --name "/rest-demo/DB_DRIVER" --with-decryption --query "Parameter.Value" --output text)
+            #DB_DIALECT=$(aws ssm get-parameter --name "/rest-demo/DB_DIALECT" --with-decryption --query "Parameter.Value" --output text)
+            
+            # -----------------------------
+            # Cleanup container if exists
+            # -----------------------------
+            docker rm -f rest-demo || true
+            
+            # -----------------------------
+            # Run new container
+            # -----------------------------
+            docker run -d \
+              -p $TARGET_PORT:8080 \
+              --name rest-demo \
+              --restart unless-stopped \
+              193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:${{ env.SHORT_SHA }}
+            
+            # -----------------------------
+            # Health check
+            # -----------------------------
+            HEALTH_OK=false
+            for i in {1..12}; do
+              RESPONSE=$(curl -s -m 3 http://localhost:$TARGET_PORT/actuator/health || true)
+              echo "Attempt $i: $RESPONSE"
+              if echo "$RESPONSE" | grep -q '"status":"UP"'; then
+                HEALTH_OK=true
+                break
+              fi
+              sleep 5
+            done
+            
+            FINAL_PORT=$TARGET_PORT
+            FINAL_SHA=${{ env.SHORT_SHA }}
+            
+            # -----------------------------
+            # Rollback if health check fails
+            # -----------------------------
+            if [ "$HEALTH_OK" != "true" ]; then
+              echo "Health check failed — rolling back"
+            
+              docker stop rest-demo || true
+              docker rm -f rest-demo || true
+            
+              if [ "$PREVIOUS_SHA" != "none" ]; then
+                PREVIOUS_SHA=$(cat previous_sha)
+                echo "Rolling back to previous SHA: $PREVIOUS_SHA"
+
+                docker run -d \
+                  -p $TARGET_PORT:8080 \
+                  --name rest-demo \
+                  --restart unless-stopped \
+                  193849564091.dkr.ecr.us-east-1.amazonaws.com/backend/rest-demo:$PREVIOUS_SHA
+              else
+                echo "Initial deployment failed"
+              fi
+              FINAL_SHA=$PREVIOUS_SHA
+            fi
+            
+            echo $FINAL_SHA > active_sha
+            
+            # -----------------------------
+            # Cleanup dangling images
+            # -----------------------------
+            docker image prune -f
+            
+            # -----------------------------
+            # Log deployment
+            # -----------------------------
+            echo "$DEPLOY_TIME - Deploy successful - SHA $FINAL_SHA " >> deploy-history.log
+            
+            echo "Deployment complete"
+
+
+      # =====================================================
+      # Check health after First instance deployment
+      # =====================================================
+      - name: Wait for ALB Healthy
+        run: |
+          echo "Waiting for ALB health..."
+          for i in {1..20}; do
+            RESPONSE=$(curl -s http://${{ secrets.ALB_DNS }}/actuator/health || true)
+            echo "Attempt $i: $RESPONSE"
+            if echo "$RESPONSE" | grep -q '"status":"UP"'; then
+              echo "ALB healthy"
+              break
+            fi
+            sleep 10
+          done
+
+      # =====================================================
+      # Deploy Second Instance
+      # =====================================================
+      - name: Deploying second instance
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST_ALB_2 }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
