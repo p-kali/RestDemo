@@ -78,3 +78,6 @@ resource "aws_lb_listener" "devops_listener" {
 output "devops_alb_dns" {
   value = aws_lb.devops_alb.dns_name
 }
+output "target_group_arn" {
+  value = aws_lb_target_group.devops_tg.arn
+}

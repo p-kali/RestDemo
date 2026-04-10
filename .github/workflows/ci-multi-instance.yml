@@ -72,6 +72,15 @@ jobs:
             DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
             echo "Deployment time: $DEPLOY_TIME"
             
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            #Deregister instance from ALB
+            aws elbv2 deregister-targets \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --targets Id=$INSTANCE_ID
+            
+            echo "Waiting for ALB to drain connections..."
+            sleep 15
+            
             cd /home/ubuntu
             TARGET_PORT=8080
             
@@ -175,7 +184,13 @@ jobs:
             # -----------------------------
             echo "$DEPLOY_TIME - Deploy successful - SHA $FINAL_SHA " >> deploy-history.log
             
+            #Registering instance back to ALB
+            aws elbv2 register-targets \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --targets Id=$INSTANCE_ID
+            
             echo "Deployment complete"
+            
 
 
       # =====================================================
@@ -209,6 +224,15 @@ jobs:
             DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
             echo "Deployment time: $DEPLOY_TIME"
             
+            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            #Deregister instance from ALB
+            aws elbv2 deregister-targets \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --targets Id=$INSTANCE_ID
+            
+            echo "Waiting for ALB to drain connections..."
+            sleep 15
+            
             cd /home/ubuntu
             TARGET_PORT=8080
             
@@ -311,5 +335,10 @@ jobs:
             # Log deployment
             # -----------------------------
             echo "$DEPLOY_TIME - Deploy successful - SHA $FINAL_SHA " >> deploy-history.log
+            
+            #Registering instance back to ALB
+            aws elbv2 register-targets \
+            --target-group-arn $TARGET_GROUP_ARN \
+            --targets Id=$INSTANCE_ID
             
             echo "Deployment complete"
