@@ -72,7 +72,16 @@ jobs:
             DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
             echo "Deployment time: $DEPLOY_TIME"
             
-            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" \
+            -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+            
+            INSTANCE_ID=$(curl -s \
+            -H "X-aws-ec2-metadata-token: $TOKEN" \
+            http://169.254.169.254/latest/meta-data/instance-id)
+          
+            echo "Instance ID: $INSTANCE_ID"
+            
+            #INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
             TARGET_GROUP_ARN=$(aws ssm get-parameter --name "/rest-demo/TARGET_GROUP_ARN" --with-decryption --query "Parameter.Value" --output text)
             #Deregister instance from ALB
             aws elbv2 deregister-targets \
@@ -225,7 +234,16 @@ jobs:
             DEPLOY_TIME=$(date '+%Y-%m-%d %H:%M:%S')
             echo "Deployment time: $DEPLOY_TIME"
             
-            INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+            TOKEN=$(curl -X PUT "http://169.254.169.254/latest/api/token" \
+            -H "X-aws-ec2-metadata-token-ttl-seconds: 21600")
+            
+            INSTANCE_ID=$(curl -s \
+            -H "X-aws-ec2-metadata-token: $TOKEN" \
+            http://169.254.169.254/latest/meta-data/instance-id)
+            
+            echo "Instance ID: $INSTANCE_ID"
+            
+            #INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
             TARGET_GROUP_ARN=$(aws ssm get-parameter --name "/rest-demo/TARGET_GROUP_ARN" --with-decryption --query "Parameter.Value" --output text)
             #Deregister instance from ALB
             aws elbv2 deregister-targets \
