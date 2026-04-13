@@ -57,13 +57,13 @@ resource "aws_lb_target_group" "devops_tg" {
     Name = "devops-tg"
   }
 }
-resource "aws_lb_target_group_attachment" "devops_tg_attach" {
-  count            = 2
-  target_group_arn = aws_lb_target_group.devops_tg.arn
-  #target_id        = aws_instance.devops_demo_ec2.id #Single EC2 instance
-  target_id        = aws_instance.devops_demo_ec2[count.index].id
-  port             = 8080
-}
+# resource "aws_lb_target_group_attachment" "devops_tg_attach" {
+#   count            = 2
+#   target_group_arn = aws_lb_target_group.devops_tg.arn
+#   #target_id        = aws_instance.devops_demo_ec2.id #Single EC2 instance
+#   target_id        = aws_instance.devops_demo_ec2[count.index].id
+#   port             = 8080
+# }
 resource "aws_lb_listener" "devops_listener" {
   load_balancer_arn = aws_lb.devops_alb.arn
   port              = 80

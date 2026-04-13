@@ -113,29 +113,22 @@ resource "aws_iam_role_policy" "alb_registration_policy" {
   })
 }
 
-resource "aws_instance" "devops_demo_ec2" {
-  #ami = "ami-0ec10929233384c7f"
-  #instance_type = "t3.micro"
-  #key_name = "qa-key"
-  count = 2
-  ami = var.ami_id
+# Create Launch template
+resource "aws_launch_template" "devops_lt" {
+  name_prefix   = "devops-demo-"
+  image_id      = var.ami_id
   instance_type = var.instance_type
-  key_name = var.key_name
+  key_name      = var.key_name
+
+  update_default_version = true
+
   vpc_security_group_ids = [aws_security_group.app_sg.id]
-  iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-  #subnet_id = aws_subnet.public_subnet_1.id
-  #subnet_id = aws_subnet.private_subnet_1.id
-  # High availability - instances in multiple subnets
-  subnet_id = element([
-    aws_subnet.private_subnet_1.id,
-    aws_subnet.private_subnet_2.id
-  ], count.index)
-  associate_public_ip_address = false
-  tags = {
-    Name = "devops-demo-ec2"
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.ec2_profile.name
   }
-  user_data_replace_on_change = true
-  user_data = <<-EOF
+
+  user_data = base64encode(<<-EOF
               #!/bin/bash
               exec > /var/log/user-data.log 2>&1
               set -ex
@@ -145,34 +138,56 @@ resource "aws_instance" "devops_demo_ec2" {
               apt-get update -y
               apt-get upgrade -y
 
-              # Install Docker
               apt-get install -y docker.io
               systemctl start docker
               systemctl enable docker
               usermod -aG docker ubuntu
 
-              # Install SSM agent
               snap install amazon-ssm-agent --classic
               systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
               systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
 
-              # Install AWS CLI  <-- ADD HERE
-              #apt-get install -y unzip curl
-              #curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              #unzip awscliv2.zip
-              #sudo ./aws/install
-
-              # Install AWS CLI
               snap install aws-cli --classic
 
-              # Install Java
               apt-get install -y openjdk-17-jre-headless
-
-              # Verify installations
-              docker --version
-              java -version
-
               EOF
+  )
+}
+
+# Create auto-scaling group
+resource "aws_autoscaling_group" "devops_asg" {
+  name                      = "devops-demo-asg"
+  desired_capacity          = 2
+  max_size                  = 3
+  min_size                  = 2
+  vpc_zone_identifier = [
+    aws_subnet.private_subnet_1.id,
+    aws_subnet.private_subnet_2.id
+  ]
+
+  target_group_arns = [aws_lb_target_group.devops_tg.arn]
+
+  launch_template {
+    id      = aws_launch_template.devops_lt.id
+    version = "$Latest"
+  }
+
+  health_check_type         = "ELB"
+  health_check_grace_period = 120
+
+  depends_on = [
+    aws_lb_listener.devops_listener
+  ]
+
+  tag {
+    key                 = "Name"
+    value               = "devops-demo-ec2"
+    propagate_at_launch = true
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 # # Create Elastic IP
@@ -198,10 +213,10 @@ resource "aws_instance" "devops_demo_ec2" {
 #   source_security_group_id = aws_security_group.app_sg.id
 # }
 
-output "app_ips" {
-  #value = aws_instance.devops_demo_ec2.public_ip #Single EC2 instance
-  value = aws_instance.devops_demo_ec2[*].public_ip
-}
+# output "app_ips" {
+#   #value = aws_instance.devops_demo_ec2.public_ip #Single EC2 instance
+#   value = aws_instance.devops_demo_ec2[*].public_ip
+# }
 
 # output "elastic_ip" {
 #   value = aws_eip.devops_eip.public_ip
