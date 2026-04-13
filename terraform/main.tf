@@ -157,10 +157,13 @@ resource "aws_instance" "devops_demo_ec2" {
               systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
 
               # Install AWS CLI  <-- ADD HERE
-              apt-get install -y unzip curl
-              curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-              unzip awscliv2.zip
-              sudo ./aws/install
+              #apt-get install -y unzip curl
+              #curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+              #unzip awscliv2.zip
+              #sudo ./aws/install
+
+              # Install AWS CLI
+              snap install aws-cli --classic
 
               # Install Java
               apt-get install -y openjdk-17-jre-headless

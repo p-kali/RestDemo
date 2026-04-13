@@ -220,6 +220,7 @@ jobs:
             --comment "Deploy rest-demo" \
             --parameters 'commands=[
               "#!/bin/bash",
+              "export PATH=$PATH:/usr/local/bin:/snap/bin",
               "set -euo pipefail",
               "echo Starting deployment",
               "cd /home/ubuntu",
