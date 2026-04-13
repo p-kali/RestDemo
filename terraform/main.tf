@@ -17,13 +17,13 @@ resource "aws_security_group" "app_sg" {
   description = "Allow SSH and App traffic"
   vpc_id = aws_vpc.devops_vpc.id
 
-  ingress {
-    description = "App port"
-    from_port = 22
-    to_port = 22
-    protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  # ingress {
+  #   description = "App port"
+  #   from_port = 22
+  #   to_port = 22
+  #   protocol = "tcp"
+  #   cidr_blocks = ["0.0.0.0/0"]
+  # }
 
   ingress {
     description = "Http port"
