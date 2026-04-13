@@ -2,7 +2,7 @@ name: RestDemo Docker VPC CI
 
 on:
   push:
-    branches: [ "multi_instance" ]
+    branches: [ "auto_scale" ]
 
 jobs:
   docker-build:
