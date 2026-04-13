@@ -34,11 +34,11 @@ resource "aws_security_group" "app_sg" {
   }
 
   ingress {
-    description = "App port"
+    description = "ALB to EC2"
     from_port = 8080
-    to_port = 8081
+    to_port = 8080
     protocol = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   egress {
@@ -78,9 +78,13 @@ resource "aws_iam_role_policy_attachment" "ecr_read" {
 }
 
 #Policy SSM read
-resource "aws_iam_role_policy_attachment" "ssm_read" {
+# resource "aws_iam_role_policy_attachment" "ssm_read" {
+#   role       = aws_iam_role.ec2_role.name
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
+# }
+resource "aws_iam_role_policy_attachment" "ssm_core" {
   role       = aws_iam_role.ec2_role.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMReadOnlyAccess"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 #Create profile/role
@@ -119,7 +123,14 @@ resource "aws_instance" "devops_demo_ec2" {
   key_name = var.key_name
   vpc_security_group_ids = [aws_security_group.app_sg.id]
   iam_instance_profile = aws_iam_instance_profile.ec2_profile.name
-  subnet_id = aws_subnet.public_subnet_1.id
+  #subnet_id = aws_subnet.public_subnet_1.id
+  #subnet_id = aws_subnet.private_subnet_1.id
+  # High availability - instances in multiple subnets
+  subnet_id = element([
+    aws_subnet.private_subnet_1.id,
+    aws_subnet.private_subnet_2.id
+  ], count.index)
+  associate_public_ip_address = false
   tags = {
     Name = "devops-demo-ec2"
   }
@@ -139,6 +150,11 @@ resource "aws_instance" "devops_demo_ec2" {
               systemctl start docker
               systemctl enable docker
               usermod -aG docker ubuntu
+
+              # Install SSM agent
+              snap install amazon-ssm-agent --classic
+              systemctl enable snap.amazon-ssm-agent.amazon-ssm-agent.service
+              systemctl start snap.amazon-ssm-agent.amazon-ssm-agent.service
 
               # Install AWS CLI  <-- ADD HERE
               apt-get install -y unzip curl
