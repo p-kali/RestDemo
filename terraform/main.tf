@@ -172,8 +172,8 @@ resource "aws_autoscaling_group" "devops_asg" {
     version = "$Latest"
   }
 
-  health_check_type         = "ELB"
-  health_check_grace_period = 120
+  health_check_type         = "EC2"
+  health_check_grace_period = 300
 
   depends_on = [
     aws_lb_listener.devops_listener

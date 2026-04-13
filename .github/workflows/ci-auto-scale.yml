@@ -1,4 +1,4 @@
-name: RestDemo Docker VPC CI
+name: RestDemo Auto-scale CI
 
 on:
   push:
