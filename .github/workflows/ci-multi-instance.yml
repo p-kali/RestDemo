@@ -219,6 +219,7 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Deploy rest-demo" \
             --parameters 'commands=[
+              "#!/bin/bash",
               "set -euo pipefail",
               "echo Starting deployment",
               "cd /home/ubuntu",
